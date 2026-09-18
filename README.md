@@ -82,5 +82,7 @@ These build from source and default to CUDA, unlike the released app.
 
 ## Licence
 
-The app is MIT. llama.cpp is MIT; the Bonsai weights are Apache-2.0 and are
-downloaded from Hugging Face at runtime, not redistributed here.
+The app is [MIT](LICENSE). llama.cpp is MIT and its binaries ship inside the
+release bundles, carrying their own licence file. The Bonsai weights are
+Apache-2.0 and are downloaded from Hugging Face at runtime, not redistributed
+here.
