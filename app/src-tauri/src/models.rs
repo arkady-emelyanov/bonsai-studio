@@ -2,6 +2,7 @@
 
 use crate::config::{ModelFiles, Settings};
 use serde::Serialize;
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -65,6 +66,23 @@ fn search_dirs(settings: &Settings) -> Vec<PathBuf> {
 }
 
 pub fn locate(settings: &Settings, variant: &Variant) -> Option<(PathBuf, ModelFiles)> {
+    // The configured model wins over any directory search. It may sit outside
+    // the search path entirely -- a hand-picked file, or a model directory that
+    // moved -- and the UI must not report it missing while the server loads it
+    // happily. Everything that asks "is this installed, and where" comes through
+    // here, so settling it once keeps survey(), download_dir() and the header
+    // from disagreeing.
+    if let Some(model) = &settings.model {
+        let weights = Path::new(&model.weights);
+        let mmproj = Path::new(&model.mmproj);
+        let names_match = weights.file_name() == Some(OsStr::new(variant.weights))
+            && mmproj.file_name() == Some(OsStr::new(variant.mmproj));
+        if names_match && weights.is_file() && mmproj.is_file() {
+            let dir = weights.parent().unwrap_or(Path::new(".")).to_path_buf();
+            return Some((dir, model.clone()));
+        }
+    }
+
     for dir in search_dirs(settings) {
         let weights = dir.join(variant.weights);
         let mmproj = dir.join(variant.mmproj);
@@ -340,7 +358,10 @@ mod tests {
 
     #[test]
     fn download_dir_follows_an_existing_part_file() {
-        let variant = &VARIANTS[0];
+        // Deliberately the variant that is not installed anywhere: with an
+        // installed one, locate() finds the real copy first and the part-file
+        // fallback never runs, making the test depend on the checkout.
+        let variant = &VARIANTS[1];
         let dir = temp_dir("partdir");
         let part = dir.join(variant.weights).with_extension("part");
         std::fs::write(&part, b"partial").unwrap();
@@ -363,6 +384,51 @@ mod tests {
         let mut settings = Settings::default();
         settings.model_dir = dir.to_string_lossy().into_owned();
         assert_eq!(download_dir(&settings, variant), dir);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn locate_honours_a_configured_model_outside_the_search_path() {
+        let variant = &VARIANTS[0];
+        let dir = temp_dir("configured");
+        let weights = dir.join(variant.weights);
+        let mmproj = dir.join(variant.mmproj);
+        std::fs::write(&weights, b"x").unwrap();
+        std::fs::write(&mmproj, b"x").unwrap();
+
+        // model_dir points elsewhere, and this directory is not on the search
+        // path -- exactly the packaged-app case, where the header read
+        // "No model downloaded" while the server started fine.
+        let mut settings = Settings::default();
+        settings.model_dir = temp_dir("configured-elsewhere").to_string_lossy().into_owned();
+        settings.model = Some(ModelFiles {
+            weights: weights.to_string_lossy().into_owned(),
+            mmproj: mmproj.to_string_lossy().into_owned(),
+        });
+
+        let (found, _) = locate(&settings, variant).expect("configured model should be found");
+        assert_eq!(found, dir);
+        assert!(survey(&settings).iter().find(|v| v.variant.id == variant.id).unwrap().installed);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn locate_ignores_a_configured_model_whose_files_are_gone() {
+        let variant = &VARIANTS[0];
+        let dir = temp_dir("configured-missing");
+        let mut settings = Settings::default();
+        settings.model_dir = dir.to_string_lossy().into_owned();
+        settings.model = Some(ModelFiles {
+            weights: dir.join(variant.weights).to_string_lossy().into_owned(),
+            mmproj: dir.join(variant.mmproj).to_string_lossy().into_owned(),
+        });
+
+        // Nothing written: a stale settings entry must not mark it installed,
+        // or a forced re-download would purge a directory holding nothing.
+        match locate(&settings, variant) {
+            None => {}
+            Some((found, _)) => assert_ne!(found, dir),
+        }
         std::fs::remove_dir_all(&dir).ok();
     }
 
