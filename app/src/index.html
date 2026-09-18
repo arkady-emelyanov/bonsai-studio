@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Bonsai Studio</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header>
+  <div class="brand">
+    <h1>Bonsai Studio</h1>
+    <p id="model-line">27B on llama.cpp</p>
+  </div>
+  <div class="control">
+    <span id="light" class="light stopped" title="Stopped"></span>
+    <button id="open-chat" class="secondary" disabled>Open chat</button>
+    <button id="power" class="power">Start</button>
+  </div>
+</header>
+
+<p id="status-msg" class="status-msg"></p>
+<div id="alert" class="alert hidden"></div>
+
+<nav class="tabs">
+  <button class="tab active" data-tab="model">Model</button>
+  <button class="tab" data-tab="api">API</button>
+  <button class="tab" data-tab="log">Log</button>
+</nav>
+
+<section class="panel" data-panel="model">
+  <label class="field">
+    <span>Variant</span>
+    <select id="variant"></select>
+  </label>
+  <div id="download-row" class="download">
+    <div class="download-head">
+      <button id="download-btn" class="secondary">Download</button>
+      <span id="download-file" class="hint"></span>
+      <button id="cancel-btn" class="secondary hidden">Cancel</button>
+    </div>
+    <div id="download-bar" class="bar hidden"><div id="download-fill"></div></div>
+    <span id="download-text" class="hint"></span>
+  </div>
+
+  <label class="field">
+    <span>Profile</span>
+    <select id="profile">
+      <option value="default">Default &mdash; 16K, f16 cache (~9 GB)</option>
+      <option value="ctx64k">64K &mdash; 4-bit cache (~9.4 GB)</option>
+      <option value="ctx100k">100K &mdash; 4-bit cache (~10.1 GB)</option>
+      <option value="max">Max &mdash; 262K, 4-bit cache (~12.8 GB)</option>
+      <option value="custom">Custom</option>
+    </select>
+  </label>
+
+  <div class="row">
+    <label class="field"><span>Context <em>(tokens)</em></span><input id="ctx" type="number" min="512" step="512" /></label>
+    <label class="field"><span>KV cache <em>(4-bit is near-lossless here)</em></span>
+      <select id="kv_type"><option value="f16">f16</option><option value="q8_0">q8_0</option><option value="q4_0">q4_0</option></select>
+    </label>
+    <label class="field"><span>GPU layers <em>(99 = all, 0 = CPU only)</em></span><input id="ngl" type="number" min="0" max="999" title="How many of the model's 64 blocks run in VRAM. Generation is memory-bandwidth bound, so a partial offload is disproportionately slow — leave this at 99 unless the model does not fit." /></label>
+  </div>
+
+  <label class="check"><input id="mmproj_cpu" type="checkbox" /> <span>Keep vision tower in system RAM <em>(frees ~0.6 GiB VRAM)</em></span></label>
+  <label class="check"><input id="kv_offload" type="checkbox" /> <span>Keep KV cache on the GPU <em>(off is slower, but fits any context)</em></span></label>
+
+  <div id="vram" class="vram"></div>
+</section>
+
+<section class="panel hidden" data-panel="api">
+  <div class="row">
+    <label class="field"><span>Port</span><input id="port" type="number" min="1" max="65535" /></label>
+    <label class="field"><span>Access</span>
+      <select id="bind_lan"><option value="false">This PC only</option><option value="true">My network</option></select>
+    </label>
+  </div>
+
+  <label class="field"><span>CORS origins</span><input id="cors_origins" type="text" placeholder="*" /></label>
+  <label class="field"><span>API key <em>(empty = no authentication)</em></span>
+    <span class="with-button"><input id="api_key" type="text" placeholder="none" /><button id="genkey" class="secondary">Generate</button></span>
+  </label>
+
+  <div class="field">
+    <span>Base URL</span>
+    <span class="with-button"><input id="base_url" type="text" readonly /><button id="copy-url" class="secondary">Copy</button></span>
+  </div>
+</section>
+
+<section class="panel hidden" data-panel="log">
+  <pre id="log"></pre>
+</section>
+
+<script src="main.js"></script>
+</body>
+</html>

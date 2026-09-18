@@ -1,0 +1,16 @@
+# Model weights: multiple GB, fetched by the app or scripts/01-download.sh
+/models/*
+!/models/.gitkeep
+
+# Upstream llama.cpp checkout, cloned by scripts/00-build.sh
+/src/
+
+# Rust build output and Tauri codegen
+/app/src-tauri/target/
+/app/src-tauri/gen/
+
+# Sidecar binaries, staged per platform at build time
+/app/src-tauri/resources/llama/
+
+# Tooling state
+.omc/

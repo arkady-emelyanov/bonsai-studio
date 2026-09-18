@@ -1,0 +1,114 @@
+name: Release
+
+# Publishing is driven by a version tag. The release is assembled as a draft and
+# only published once every platform has built, so a failure on one runner never
+# leaves a half-populated release visible.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build and publish (e.g. v1.0.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ubuntu-22.04 keeps the AppImage's glibc requirement low. If the
+          # runner label is retired, bump it to ubuntu-24.04 and expect the
+          # AppImage to need a newer glibc.
+          - os: ubuntu-22.04
+            platform: linux-x64
+            args: ""
+          - os: macos-14
+            platform: macos-arm64
+            args: "--target aarch64-apple-darwin"
+          # The last Intel macOS runner. Drop this entry if it disappears;
+          # Apple Silicon covers the large majority of users.
+          - os: macos-13
+            platform: macos-x64
+            args: "--target x86_64-apple-darwin"
+          - os: windows-latest
+            platform: windows-x64
+            args: ""
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Install Linux build dependencies
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            patchelf \
+            build-essential \
+            file
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-arm64' && 'aarch64-apple-darwin' || matrix.platform == 'macos-x64' && 'x86_64-apple-darwin' || '' }}
+
+      - name: Cache cargo
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri
+          key: ${{ matrix.platform }}
+
+      # llama-server and its libraries are fetched from a pinned upstream
+      # release rather than compiled here: building llama.cpp per platform would
+      # dominate the job, and the release binaries are what upstream tests.
+      - name: Stage llama.cpp sidecar
+        shell: bash
+        run: |
+          echo "LLAMA_TAG=$(tr -d '[:space:]' < .llama-cpp-version)" >> "$GITHUB_ENV"
+          ./scripts/fetch-sidecar.sh ${{ matrix.platform }}
+
+      - name: Build and upload
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: app
+          tagName: ${{ github.event.inputs.tag || github.ref_name }}
+          releaseName: Bonsai Studio ${{ github.event.inputs.tag || github.ref_name }}
+          releaseBody: |
+            Bundled llama.cpp: [`${{ env.LLAMA_TAG }}`](https://github.com/ggml-org/llama.cpp/releases/tag/${{ env.LLAMA_TAG }})
+
+            Linux and Windows builds use the Vulkan backend (NVIDIA, AMD and
+            Intel); macOS uses Metal. Model weights are downloaded on first run.
+
+            These binaries are unsigned: macOS needs right-click - Open, and
+            Windows SmartScreen will warn on first launch.
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
+
+  publish:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish the draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: gh release edit "$TAG" --draft=false --repo "$GITHUB_REPOSITORY"
