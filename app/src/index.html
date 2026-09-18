@@ -66,6 +66,21 @@
   <label class="check"><input id="kv_offload" type="checkbox" /> <span>Keep KV cache on the GPU <em>(off is slower, but fits any context)</em></span></label>
 
   <div id="vram" class="vram"></div>
+
+  <figure id="gpu" class="gpu hidden">
+    <figcaption class="gpu-head">
+      <span class="gpu-title">GPU memory <em>(all processes)</em></span>
+      <span id="gpu-value" class="gpu-value"></span>
+    </figcaption>
+    <svg id="gpu-plot" class="gpu-plot" viewBox="0 0 320 56" preserveAspectRatio="none"
+         role="img" aria-labelledby="gpu-desc">
+      <title id="gpu-desc">GPU memory used over the last minute and a half</title>
+      <path id="gpu-area" class="gpu-area" d="" />
+      <path id="gpu-line" class="gpu-line" d="" />
+      <line id="gpu-cursor" class="gpu-cursor" x1="0" y1="0" x2="0" y2="56" style="display:none" />
+    </svg>
+    <span id="gpu-foot" class="hint"></span>
+  </figure>
 </section>
 
 <section class="panel hidden" data-panel="api">

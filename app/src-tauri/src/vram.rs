@@ -29,6 +29,37 @@ fn kv_divisor(kv_type: &str) -> u64 {
     }
 }
 
+/// A point-in-time reading of device 0.
+///
+/// These are device-wide figures, not this process's share: the desktop
+/// compositor and anything else on the card are included. That is the honest
+/// number for "will the next model load fit".
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct GpuSample {
+    pub used_mib: u64,
+    pub total_mib: u64,
+}
+
+/// None when there is no NVIDIA GPU to ask -- Apple Silicon, AMD and Intel all
+/// run this app happily through Metal or Vulkan, and none of them ship
+/// nvidia-smi. Callers hide the readout rather than showing zeroes.
+pub fn sample() -> Option<GpuSample> {
+    let out = std::process::Command::new("nvidia-smi")
+        .args(["--query-gpu=memory.used,memory.total", "--format=csv,noheader,nounits"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    let line = text.lines().next()?;
+    let (used, total) = line.split_once(',')?;
+    Some(GpuSample {
+        used_mib: used.trim().parse().ok()?,
+        total_mib: total.trim().parse().ok()?,
+    })
+}
+
 /// Free VRAM on device 0, via nvidia-smi. None if it is absent or unhappy --
 /// plenty of valid setups (Vulkan on AMD, CPU-only, macOS) have no nvidia-smi,
 /// and none of them should produce a scary warning.

@@ -72,6 +72,23 @@ one holding a partial file, and only then to the configured model directory. The
 resolution has to be stable across a forced re-download — keying it off "is it
 installed" alone sends the retry somewhere else and strands the partial file.
 
+## GPU memory readout
+
+A sparkline under the settings tracks device memory while the app is open,
+with the current value, the peak, and a hover readout for any point in the
+window.
+
+The y-scale is pinned to 0..total rather than fitted to the data: auto-scaling
+a utilisation plot turns a flat 91% into a dramatic mountain range and hides
+how much headroom is actually left. Figures are device-wide, so the desktop
+compositor and anything else on the card are included -- that is the honest
+number for "will the next model load fit".
+
+It reads `nvidia-smi`, so it appears only on NVIDIA systems. Apple Silicon, AMD
+and Intel all run the app fine through Metal or Vulkan; there the readout is
+hidden rather than showing zeroes. The pre-flight VRAM estimate hides once the
+server is up, since the live graph is the better answer by then.
+
 ## Profiles
 
 Context size, KV cache type, and vision-tower placement have to move together;

@@ -32,6 +32,12 @@ fn save_settings(mut next: Settings, state: tauri::State<AppState>) -> Result<Se
     Ok(next)
 }
 
+/// Live GPU memory for the utilisation readout. None hides it entirely.
+#[tauri::command]
+fn gpu_sample() -> Option<vram::GpuSample> {
+    vram::sample()
+}
+
 #[tauri::command]
 fn estimate_vram(state: tauri::State<AppState>) -> vram::VramEstimate {
     let s = state.settings.lock().unwrap();
@@ -168,6 +174,7 @@ pub fn run() {
             get_settings,
             save_settings,
             estimate_vram,
+            gpu_sample,
             generate_api_key,
             list_models,
             select_model,

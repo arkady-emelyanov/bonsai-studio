@@ -213,6 +213,11 @@ async function pollStatus() {
 
   $("open-chat").disabled = status.state !== "ready";
 
+  // The estimate answers "will this fit" before starting. Once the server is
+  // up, the live graph below is the real answer, and leaving a pre-flight
+  // "N MiB free" next to it reads as a contradiction.
+  $("vram").classList.toggle("hidden", running);
+
   const log = $("log");
   const pinned = log.scrollTop + log.clientHeight >= log.scrollHeight - 24;
   log.textContent = status.log.join("\n");
@@ -290,8 +295,107 @@ $("copy-url").addEventListener("click", async () => {
 });
 $("open-chat").addEventListener("click", () => invoke("open_chat").catch(showAlert));
 
+
+// --- GPU memory sparkline ----------------------------------------------------
+//
+// One series over time, so no legend: the caption names it. The y-scale is
+// pinned to 0..total rather than fitted to the data -- auto-scaling a
+// utilisation plot turns a flat 78% into a dramatic mountain range and hides
+// how much headroom is actually left.
+
+const GPU_CAP = 90;          // samples retained; at ~0.7s each, about a minute
+const GPU_W = 320;
+const GPU_H = 56;
+
+let gpuSamples = [];
+let gpuHover = null;
+
+// Newest sample pinned to the right edge, older ones trailing left. Anchoring
+// at the left instead makes a partly-filled buffer look like a chart that
+// stops halfway, and moves "now" every tick until it fills.
+function gpuX(i, n) {
+  return GPU_W - (n - 1 - i) * (GPU_W / (GPU_CAP - 1));
+}
+
+function gpuPath(samples, total, close) {
+  if (!samples.length || !total) return "";
+  const n = samples.length;
+  const x = (i) => gpuX(i, n);
+  const y = (v) => GPU_H - Math.max(0, Math.min(1, v / total)) * GPU_H;
+  const pts = samples.map((s, i) => `${x(i).toFixed(1)},${y(s.used).toFixed(1)}`);
+  let d = `M${pts.join(" L")}`;
+  if (close) {
+    d += ` L${x(samples.length - 1).toFixed(1)},${GPU_H} L${x(0).toFixed(1)},${GPU_H} Z`;
+  }
+  return d;
+}
+
+const gb = (mib) => (mib / 1024).toFixed(1);
+
+function renderGpu() {
+  const fig = $("gpu");
+  if (!gpuSamples.length) {
+    fig.classList.add("hidden");
+    return;
+  }
+  fig.classList.remove("hidden");
+
+  const total = gpuSamples[gpuSamples.length - 1].total;
+  $("gpu-line").setAttribute("d", gpuPath(gpuSamples, total, false));
+  $("gpu-area").setAttribute("d", gpuPath(gpuSamples, total, true));
+
+  // Hovering reads that sample; otherwise the headline is the live value.
+  const shown = gpuHover !== null ? gpuSamples[gpuHover] : gpuSamples[gpuSamples.length - 1];
+  const pct = total ? Math.round((shown.used / total) * 100) : 0;
+  $("gpu-value").textContent = `${gb(shown.used)} / ${gb(total)} GiB \u00b7 ${pct}%`;
+
+  const peak = gpuSamples.reduce((m, s) => Math.max(m, s.used), 0);
+  if (gpuHover !== null) {
+    const agoMs = gpuSamples[gpuSamples.length - 1].t - shown.t;
+    const ago = agoMs < 1000 ? "now" : `${Math.round(agoMs / 1000)}s ago`;
+    $("gpu-foot").textContent = `${ago} \u00b7 peak ${gb(peak)} GiB`;
+  } else {
+    $("gpu-foot").textContent = `peak ${gb(peak)} GiB`;
+  }
+}
+
+async function pollGpu() {
+  const s = await invoke("gpu_sample");
+  // No NVIDIA GPU (Apple Silicon, AMD, Intel) -- hide rather than show zeroes.
+  if (!s) {
+    gpuSamples = [];
+    renderGpu();
+    return;
+  }
+  gpuSamples.push({ used: s.used_mib, total: s.total_mib, t: Date.now() });
+  if (gpuSamples.length > GPU_CAP) gpuSamples.shift();
+  renderGpu();
+}
+
+$("gpu-plot").addEventListener("mousemove", (e) => {
+  if (!gpuSamples.length) return;
+  const rect = e.currentTarget.getBoundingClientRect();
+  const ratio = (e.clientX - rect.left) / rect.width;
+  const slotsFromRight = Math.round((1 - ratio) * (GPU_CAP - 1));
+  const i = gpuSamples.length - 1 - slotsFromRight;
+  gpuHover = Math.max(0, Math.min(gpuSamples.length - 1, i));
+  const cursor = $("gpu-cursor");
+  const x = gpuX(gpuHover, gpuSamples.length);
+  cursor.setAttribute("x1", x);
+  cursor.setAttribute("x2", x);
+  cursor.style.display = "";
+  renderGpu();
+});
+
+$("gpu-plot").addEventListener("mouseleave", () => {
+  gpuHover = null;
+  $("gpu-cursor").style.display = "none";
+  renderGpu();
+});
+
 (async function init() {
   settings = await invoke("get_settings");
+  await pollGpu();
   await refreshModels();
   render();
   await pollStatus();
@@ -299,5 +403,6 @@ $("open-chat").addEventListener("click", () => invoke("open_chat").catch(showAle
   setInterval(async () => {
     await pollDownload();
     await pollStatus();
+    await pollGpu();
   }, 700);
 })();
