@@ -36,11 +36,30 @@ trap 'rm -rf "$WORK"' EXIT
 echo "==> $ASSET"
 curl -fL --retry 3 --retry-delay 5 -o "$WORK/$ASSET" "$URL"
 
+# Git Bash on Windows ships GNU tar, which cannot read zip archives, so the
+# extraction path has to be chosen rather than assumed.
+extract_zip() {
+  local archive="$1" dest="$2"
+  if command -v unzip >/dev/null 2>&1; then
+    unzip -q "$archive" -d "$dest"
+  elif [[ -x /c/Windows/System32/tar.exe ]]; then
+    # The system bsdtar does handle zip, unlike the MSYS GNU tar on PATH.
+    /c/Windows/System32/tar.exe -xf "$(cygpath -w "$archive")" -C "$(cygpath -w "$dest")"
+  elif command -v powershell.exe >/dev/null 2>&1; then
+    powershell.exe -NoProfile -NonInteractive -Command \
+      "Expand-Archive -Path '$(cygpath -w "$archive")' -DestinationPath '$(cygpath -w "$dest")' -Force"
+  else
+    # macOS and most Linux distributions ship bsdtar or a tar that copes.
+    tar -xf "$archive" -C "$dest"
+  fi
+}
+
 # The tarballs wrap everything in llama-<tag>/; the Windows zip is flat.
+mkdir -p "$WORK/x"
 if [[ "$ASSET" == *.zip ]]; then
-  mkdir -p "$WORK/x" && tar -xf "$WORK/$ASSET" -C "$WORK/x"
+  extract_zip "$WORK/$ASSET" "$WORK/x"
 else
-  mkdir -p "$WORK/x" && tar -xzf "$WORK/$ASSET" -C "$WORK/x" --strip-components=1
+  tar -xzf "$WORK/$ASSET" -C "$WORK/x" --strip-components=1
 fi
 
 rm -rf "$DEST"

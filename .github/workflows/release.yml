@@ -30,12 +30,15 @@ jobs:
           - os: ubuntu-22.04
             platform: linux-x64
             args: ""
+          # Both macOS architectures build on one Apple Silicon host: the x86_64
+          # target cross-compiles from arm64 with the same SDK, so no Intel
+          # runner is needed. A macOS host itself is unavoidable -- the SDK is
+          # licensed to Apple hardware, and .app/.dmg bundling needs macOS
+          # tooling that has no Linux equivalent.
           - os: macos-14
             platform: macos-arm64
             args: "--target aarch64-apple-darwin"
-          # The last Intel macOS runner. Drop this entry if it disappears;
-          # Apple Silicon covers the large majority of users.
-          - os: macos-13
+          - os: macos-14
             platform: macos-x64
             args: "--target x86_64-apple-darwin"
           - os: windows-latest
