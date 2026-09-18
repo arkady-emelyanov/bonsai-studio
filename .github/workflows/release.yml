@@ -29,16 +29,16 @@ jobs:
           # AppImage to need a newer glibc.
           - os: ubuntu-22.04
             platform: linux-x64
-            args: ""
+            args: "--bundles appimage,deb"
           # Apple Silicon only. A macOS host is unavoidable regardless: the SDK
           # is licensed to Apple hardware, and .app/.dmg bundling needs macOS
           # tooling (hdiutil, codesign) that has no Linux equivalent.
           - os: macos-14
             platform: macos-arm64
-            args: "--target aarch64-apple-darwin"
+            args: "--target aarch64-apple-darwin --bundles app,dmg"
           - os: windows-latest
             platform: windows-x64
-            args: ""
+            args: "--bundles nsis"
 
     steps:
       - uses: actions/checkout@v4
