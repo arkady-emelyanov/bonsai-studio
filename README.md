@@ -15,8 +15,9 @@ Download the build for your platform from
 weights are fetched on first run, not bundled.
 
 Linux and Windows builds use the Vulkan backend, so they work on NVIDIA, AMD and
-Intel with no CUDA install. macOS uses Metal. The binaries are unsigned: macOS
-needs right-click → Open, and Windows SmartScreen warns on first launch.
+Intel GPUs with no CUDA install. macOS is Apple Silicon only and uses Metal.
+The binaries are unsigned: macOS needs right-click → Open, and Windows
+SmartScreen warns on first launch.
 
 ## Using it
 
@@ -47,7 +48,7 @@ before starting if it exceeds free VRAM.
 ## Building
 
 ```bash
-scripts/fetch-sidecar.sh linux-x64   # or macos-arm64, macos-x64, windows-x64
+scripts/fetch-sidecar.sh linux-x64   # or macos-arm64, windows-x64
 cd app/src-tauri && cargo tauri build
 ```
 

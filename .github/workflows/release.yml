@@ -30,17 +30,12 @@ jobs:
           - os: ubuntu-22.04
             platform: linux-x64
             args: ""
-          # Both macOS architectures build on one Apple Silicon host: the x86_64
-          # target cross-compiles from arm64 with the same SDK, so no Intel
-          # runner is needed. A macOS host itself is unavoidable -- the SDK is
-          # licensed to Apple hardware, and .app/.dmg bundling needs macOS
-          # tooling that has no Linux equivalent.
+          # Apple Silicon only. A macOS host is unavoidable regardless: the SDK
+          # is licensed to Apple hardware, and .app/.dmg bundling needs macOS
+          # tooling (hdiutil, codesign) that has no Linux equivalent.
           - os: macos-14
             platform: macos-arm64
             args: "--target aarch64-apple-darwin"
-          - os: macos-14
-            platform: macos-x64
-            args: "--target x86_64-apple-darwin"
           - os: windows-latest
             platform: windows-x64
             args: ""
@@ -95,7 +90,8 @@ jobs:
             Bundled llama.cpp: [`${{ env.LLAMA_TAG }}`](https://github.com/ggml-org/llama.cpp/releases/tag/${{ env.LLAMA_TAG }})
 
             Linux and Windows builds use the Vulkan backend (NVIDIA, AMD and
-            Intel); macOS uses Metal. Model weights are downloaded on first run.
+            Intel GPUs); macOS is Apple Silicon only and uses Metal. Model
+            weights are downloaded on first run.
 
             These binaries are unsigned: macOS needs right-click - Open, and
             Windows SmartScreen will warn on first launch.

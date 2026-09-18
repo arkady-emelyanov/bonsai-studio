@@ -9,7 +9,7 @@
 #
 #   scripts/fetch-sidecar.sh <platform>
 #
-# Platforms: linux-x64, macos-arm64, macos-x64, windows-x64
+# Platforms: linux-x64, macos-arm64, windows-x64 (Apple Silicon only on macOS)
 
 set -euo pipefail
 
