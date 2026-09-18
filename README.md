@@ -8,6 +8,8 @@ Bonsai 27B is a Qwen3.6-27B derivative quantized end-to-end to ternary or binary
 weights. The ternary build is ~7.2 GB deployed and keeps roughly 95% of FP16
 quality, which is what puts a 27B model on a single consumer GPU.
 
+![Bonsai Studio serving Ternary Bonsai 27B at a 100K context on a 12 GiB RTX 3060](docs/screenshot.png)
+
 ## Install
 
 Download the build for your platform from
