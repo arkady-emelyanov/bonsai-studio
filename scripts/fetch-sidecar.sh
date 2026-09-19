@@ -7,6 +7,13 @@
 # version is pinned in .llama-cpp-version rather than tracking "latest", so a
 # tagged build is reproducible and upstream cannot break a release unannounced.
 #
+# The release comes from the PrismML fork rather than ggml-org/llama.cpp: Ternary
+# Bonsai 2 stores its weights in a rotated basis and needs a runtime
+# Walsh-Hadamard transform that is not upstream yet (ggml-org/llama.cpp#27779).
+# The fork rebases on upstream and publishes the same asset names, so this is a
+# repo swap and nothing more; point BONSAI_RELEASE_REPO back at ggml-org, with a
+# plain upstream tag in .llama-cpp-version, to build against stock llama.cpp.
+#
 #   scripts/fetch-sidecar.sh <platform>
 #
 # Platforms: linux-x64, macos-arm64, windows-x64 (Apple Silicon only on macOS)
@@ -29,7 +36,8 @@ case "$PLATFORM" in
   *) echo "Unknown platform '$PLATFORM'" >&2; exit 1 ;;
 esac
 
-URL="https://github.com/ggml-org/llama.cpp/releases/download/${TAG}/${ASSET}"
+REPO="${BONSAI_RELEASE_REPO:-PrismML-Eng/llama.cpp}"
+URL="https://github.com/${REPO}/releases/download/${TAG}/${ASSET}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 

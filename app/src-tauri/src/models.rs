@@ -6,31 +6,79 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-/// The two variants that run on stock upstream llama.cpp.
+/// The variants the bundled llama-server can run.
 ///
-/// Deliberately absent: Ternary Bonsai 2 (PTQ1_0/PQ2_0) and the `PQ2_0` file in
-/// the plain ternary repo, which need a runtime Walsh-Hadamard transform that is
-/// not upstream; and the legacy `-Q2_0.gguf`, a pre-migration packing stored
+/// The sidecar is built from the PrismML fork (see `scripts/fetch-sidecar.sh`),
+/// which is what makes the Bonsai 2 entry possible: its weights are stored in a
+/// rotated basis and need a runtime Walsh-Hadamard transform that upstream does
+/// not have yet. The first two entries predate that and run on either build.
+///
+/// Deliberately absent: the legacy `-Q2_0.gguf`, a pre-migration packing stored
 /// under the ggml type id that now belongs to the official group-64 format --
 /// current builds load it without complaint and emit gibberish.
-pub const VARIANTS: &[Variant] = &[
-    Variant {
-        id: "ternary",
-        label: "Ternary Bonsai 27B (1.71 bpw)",
-        repo: "prism-ml/Ternary-Bonsai-27B-gguf",
-        weights: "Ternary-Bonsai-27B-Q2_g64.gguf",
-        mmproj: "Ternary-Bonsai-27B-mmproj-Q8_0.gguf",
-        bytes: 7_585_330_240 + 629_246_880,
-    },
-    Variant {
-        id: "bonsai",
-        label: "Bonsai 27B (1-bit)",
-        repo: "prism-ml/Bonsai-27B-gguf",
-        weights: "Bonsai-27B-Q1_0.gguf",
-        mmproj: "Bonsai-27B-mmproj-Q8_0.gguf",
-        bytes: 3_530_000_000 + 629_246_880,
-    },
-];
+///
+/// The list is platform-dependent, because `PQ2_0` is -- see `TERNARY2_PQ`.
+#[cfg(not(target_os = "macos"))]
+pub const VARIANTS: &[Variant] = &[TERNARY, BONSAI, TERNARY2];
+
+#[cfg(target_os = "macos")]
+pub const VARIANTS: &[Variant] = &[TERNARY, BONSAI, TERNARY2, TERNARY2_PQ];
+
+const TERNARY: Variant = Variant {
+    id: "ternary",
+    label: "Ternary Bonsai 27B (1.71 bpw)",
+    repo: "prism-ml/Ternary-Bonsai-27B-gguf",
+    weights: "Ternary-Bonsai-27B-Q2_g64.gguf",
+    mmproj: "Ternary-Bonsai-27B-mmproj-Q8_0.gguf",
+    bytes: 7_585_330_240 + 629_246_880,
+};
+
+const BONSAI: Variant = Variant {
+    id: "bonsai",
+    label: "Bonsai 27B (1-bit)",
+    repo: "prism-ml/Bonsai-27B-gguf",
+    weights: "Bonsai-27B-Q1_0.gguf",
+    mmproj: "Bonsai-27B-mmproj-Q8_0.gguf",
+    bytes: 3_530_000_000 + 629_246_880,
+};
+
+// After the older two, so an existing install keeps starting the variant it
+// already has: the list order decides what the picker falls back to.
+const TERNARY2: Variant = Variant {
+    id: "ternary2",
+    label: "Ternary Bonsai 2 27B (1.76 bpw)",
+    repo: "prism-ml/Ternary-Bonsai-2-27B-gguf",
+    weights: "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+    mmproj: "Ternary-Bonsai-2-27B-mmproj-Q8_0.gguf",
+    bytes: 5_946_648_928 + 629_246_976,
+};
+
+/// The same weights as [`TERNARY2`] in the other packing the repo ships: a trit
+/// per 2-bit slot rather than densely packed, which costs 1.26 GB and buys
+/// cheaper unpacking -- faster prompt processing everywhere, and the faster
+/// decode on the datacentre cards. Quality is identical; only the packing
+/// differs.
+///
+/// macOS only, and not for want of trying: at the pinned fork tag the ternary
+/// kernels cover `PQ2_0` under CUDA and Metal but not Vulkan, and the Linux and
+/// Windows bundles are Vulkan builds precisely so they run on AMD and Intel
+/// without a CUDA install. Offering it there would mean shipping a second,
+/// NVIDIA-only sidecar. Metal has the kernels, so macOS simply gets the extra
+/// entry -- which is also the backend the published throughput figures for this
+/// packing were measured on.
+///
+/// A settings file that names `ternary2-pq` on a non-macOS build resolves to
+/// nothing and the app falls back to the default, which is the wanted behaviour
+/// for settings copied between machines.
+#[cfg(target_os = "macos")]
+const TERNARY2_PQ: Variant = Variant {
+    id: "ternary2-pq",
+    label: "Ternary Bonsai 2 27B (2.13 bpw, faster prompts)",
+    repo: "prism-ml/Ternary-Bonsai-2-27B-gguf",
+    weights: "Ternary-Bonsai-2-27B-PQ2_0.gguf",
+    mmproj: "Ternary-Bonsai-2-27B-mmproj-Q8_0.gguf",
+    bytes: 7_206_168_928 + 629_246_976,
+};
 
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct Variant {
