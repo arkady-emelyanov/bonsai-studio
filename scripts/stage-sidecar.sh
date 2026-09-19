@@ -13,7 +13,8 @@ BIN_DIR="${BONSAI_BIN_DIR:-$ROOT/src/llama.cpp/build/bin}"
 DEST="${BONSAI_STAGE_DIR:-$ROOT/app/src-tauri/resources/llama}"
 
 if [[ ! -x "$BIN_DIR/llama-server" ]]; then
-  echo "No llama-server in $BIN_DIR -- run scripts/00-build.sh first." >&2
+  echo "No llama-server in $BIN_DIR -- build the PrismML fork there first, or" >&2
+  echo "set BONSAI_BIN_DIR. For a prebuilt one, use scripts/fetch-sidecar.sh." >&2
   exit 1
 fi
 

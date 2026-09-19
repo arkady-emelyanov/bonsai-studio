@@ -67,19 +67,6 @@ assembles a draft release, and publishes it once every platform succeeds.
 git tag v1.0.0 && git push origin v1.0.0
 ```
 
-## Running llama.cpp directly
-
-The `scripts/` directory drives llama.cpp without the app — useful for
-benchmarking or when you want a specific backend:
-
-```bash
-scripts/00-build.sh        # clone and build llama.cpp with CUDA
-scripts/01-download.sh     # fetch weights into models/
-BONSAI_PROFILE=64k scripts/03-server.sh
-```
-
-These build from source and default to CUDA, unlike the released app.
-
 ## Licence
 
 The app is [MIT](LICENSE). llama.cpp is MIT and its binaries ship inside the
