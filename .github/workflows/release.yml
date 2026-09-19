@@ -76,6 +76,10 @@ jobs:
         shell: bash
         run: |
           echo "LLAMA_TAG=$(tr -d '[:space:]' < .llama-cpp-version)" >> "$GITHUB_ENV"
+          # Keep the note's link on the repo the binaries actually came from:
+          # fetch-sidecar.sh defaults to the fork, whose tags do not exist
+          # upstream, so a hardcoded ggml-org URL would 404.
+          echo "LLAMA_REPO=${BONSAI_RELEASE_REPO:-PrismML-Eng/llama.cpp}" >> "$GITHUB_ENV"
           ./scripts/fetch-sidecar.sh ${{ matrix.platform }}
 
       - name: Build and upload
@@ -87,7 +91,7 @@ jobs:
           tagName: ${{ github.event.inputs.tag || github.ref_name }}
           releaseName: Bonsai Studio ${{ github.event.inputs.tag || github.ref_name }}
           releaseBody: |
-            Bundled llama.cpp: [`${{ env.LLAMA_TAG }}`](https://github.com/ggml-org/llama.cpp/releases/tag/${{ env.LLAMA_TAG }})
+            Bundled llama.cpp: [`${{ env.LLAMA_TAG }}`](https://github.com/${{ env.LLAMA_REPO }}/releases/tag/${{ env.LLAMA_TAG }})
 
             Linux and Windows builds use the Vulkan backend (NVIDIA, AMD and
             Intel GPUs); macOS is Apple Silicon only and uses Metal. Model
