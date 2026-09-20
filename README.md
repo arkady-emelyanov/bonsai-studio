@@ -4,11 +4,11 @@ A desktop app for running [Bonsai 27B](https://docs.prismml.com/models/bonsai-27
 locally: a start/stop button, an options dialog, and an OpenAI-compatible API on
 `http://127.0.0.1:11435/v1`.
 
-Bonsai 27B is a Qwen3.6-27B derivative quantized end-to-end to ternary or binary
-weights. The ternary build is ~7.2 GB deployed and keeps roughly 95% of FP16
+Bonsai is a Qwen-derived family quantized end-to-end to ternary or binary
+weights. The ternary builds run 5.9-7.2 GB deployed while keeping close to FP16
 quality, which is what puts a 27B model on a single consumer GPU.
 
-![Bonsai Studio serving Ternary Bonsai 27B at a 100K context on a 12 GiB RTX 3060](docs/screenshot.png)
+![Bonsai Studio serving Bonsai 27B with the agent workload profile, thinking bounded to 512 tokens](docs/screenshot.png)
 
 ## Install
 
@@ -31,6 +31,46 @@ Point any OpenAI client at `http://127.0.0.1:11435/v1`; the API key is ignored
 unless you set one. The endpoint serves the same model, with vision and native
 tool calling.
 
+## Variants
+
+| Variant | Packing | Size | Notes |
+| --- | --- | --- | --- |
+| Ternary Bonsai 27B | Q2_0 group-64, 1.71 bpw | 7.6 GB | best quality of the originals |
+| Bonsai 27B | Q1_0, 1 bit | 3.5 GB | half the footprint |
+| Ternary Bonsai 2 27B | PTQ1_0, 1.76 bpw | 5.9 GB | newer model, densely packed trits |
+| Ternary Bonsai 2 27B | PQ2_0, 2.13 bpw | 7.2 GB | macOS only — same weights, cheaper to unpack, so prompts process faster |
+
+Ternary Bonsai 2 stores its weights in a rotated basis and needs a runtime
+Walsh-Hadamard transform, so the bundled `llama-server` comes from the
+[PrismML fork](https://github.com/PrismML-Eng/llama.cpp) rather than upstream.
+PQ2_0 is macOS only because those kernels exist for CUDA and Metal but not
+Vulkan, and the Linux and Windows bundles are Vulkan builds so they run on AMD
+and Intel without a CUDA install.
+
+## Workloads
+
+Sampling and thinking move together, because they are one decision. The
+**Workload** tab picks a profile, and a profile sets both:
+
+| Profile | Sampling | Thinking |
+| --- | --- | --- |
+| Chat | temp 1.0, top-p 0.95 | on, unbounded |
+| Instruct | temp 0.7, top-p 0.80, presence penalty 1.5 | off |
+| Agent / tool use | temp 0.6, top-p 0.85, no presence penalty | on, bounded to 512 tokens |
+
+Chat and Instruct are the values the model card gives for thinking and
+non-thinking use. Agent is for many short structured answers — a schema-shaped
+decision per request — where an unbounded chain spends thousands of tokens
+deliberating before a one-line answer. Bounding the thinking is what brings a
+request from minutes to seconds; the presence penalty is deliberately left at
+zero, because a schema-constrained reply has to repeat field names and
+punctuation.
+
+Editing any value switches to **Custom**, and **Save as** keeps a named profile
+of your own, sampling and thinking together. Every setting is a launch flag, so
+changes apply on the next start — the app says so, with a **Restart** button,
+whenever what is running has drifted from what the panel shows.
+
 ## Memory
 
 Published peak figures for the ternary build, and what they mean for a 12 GiB
@@ -50,13 +90,17 @@ before starting if it exceeds free VRAM.
 ## Building
 
 ```bash
-scripts/fetch-sidecar.sh linux-x64   # or macos-arm64, windows-x64
-cd app/src-tauri && cargo tauri build
+make run      # start it
+make build    # release bundles
+make test
 ```
 
-The sidecar script stages `llama-server` and its libraries from the pinned
-upstream release in `.llama-cpp-version`. See [app/README.md](app/README.md) for
-the architecture and the settings model.
+`make` stages the sidecar first when none is present. `scripts/fetch-sidecar.sh`
+fetches `llama-server` and its libraries from the release pinned in
+`.llama-cpp-version`; re-run it as `make sidecar` after changing that pin, and
+set `BONSAI_RELEASE_REPO` to build against stock upstream llama.cpp, which runs
+everything except Ternary Bonsai 2. See [app/README.md](app/README.md) for the
+architecture and the settings model.
 
 ## Releasing
 
