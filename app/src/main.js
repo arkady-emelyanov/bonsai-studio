@@ -10,6 +10,20 @@ let downloading = false;
 const TEXT_FIELDS = ["kv_type", "cors_origins", "api_key"];
 const NUM_FIELDS = ["ctx", "ngl", "port"];
 const BOOL_FIELDS = ["mmproj_cpu", "kv_offload"];
+// A workload is sampling plus reasoning, held in one object on Settings, so the
+// two halves are read and written together.
+const SAMPLING_FIELDS = ["temp", "top_p", "top_k", "min_p", "presence_penalty"];
+const REASONING_FIELDS = ["reasoning", "reasoning_budget", "reasoning_budget_message"];
+const WORKLOAD_FIELDS = [...SAMPLING_FIELDS, ...REASONING_FIELDS];
+
+// Mirrors the built-ins in config.rs. They are listed here only to label the
+// picker; the numbers themselves come back from the backend.
+const BUILTIN_PRESETS = [
+  ["chat", "Chat — long answers, unbounded thinking"],
+  ["instruct", "Instruct — non-thinking"],
+  ["agent", "Agent / tool use — short structured answers, bounded thinking"],
+  ["custom", "Custom"],
+];
 
 function render() {
   if (!settings) return;
@@ -26,7 +40,118 @@ function render() {
   $("kv_type").disabled = locked;
   $("mmproj_cpu").disabled = locked;
 
+  renderWorkload();
   refreshVram();
+}
+
+// --- workload ----------------------------------------------------------------
+
+function isBuiltin(id) {
+  return BUILTIN_PRESETS.some(([key]) => key === id);
+}
+
+// Sampling lives under workload.sampling; reasoning sits beside it. One lookup
+// so the field loop does not care which half a control belongs to.
+function workloadValue(field) {
+  const w = settings.workload;
+  return SAMPLING_FIELDS.includes(field) ? w.sampling[field] : w[field];
+}
+
+function setWorkloadValue(field, value) {
+  const w = settings.workload;
+  if (SAMPLING_FIELDS.includes(field)) w.sampling[field] = value;
+  else w[field] = value;
+}
+
+function readField(field) {
+  const el = $(field);
+  if (el.type === "number") return Number(el.value) || 0;
+  return el.value;
+}
+
+function renderWorkload() {
+  const sel = $("workload_profile");
+  sel.innerHTML = "";
+  const saved = settings.workload_presets.map((p) => [p.id, p.name]);
+  // Saved profiles sit above Custom, so the built-ins and the user's own names
+  // read as one list of choices rather than two.
+  const entries = [...BUILTIN_PRESETS.slice(0, 3), ...saved, BUILTIN_PRESETS[3]];
+  for (const [value, label] of entries) {
+    const opt = document.createElement("option");
+    opt.value = value;
+    opt.textContent = label;
+    sel.appendChild(opt);
+  }
+  sel.value = settings.workload_profile;
+
+  for (const f of WORKLOAD_FIELDS) $(f).value = workloadValue(f);
+
+  // A named profile owns its numbers: editing one means you wanted Custom, the
+  // same rule the memory profile uses.
+  const named = settings.workload_profile !== "custom";
+  for (const f of WORKLOAD_FIELDS) $(f).disabled = named;
+  $("delete-preset").classList.toggle("hidden", isBuiltin(settings.workload_profile));
+
+  const notes = {
+    chat: "The card's thinking-mode values. Reasoning needs the exploration a high temperature buys.",
+    instruct: "The card's non-thinking values, with thinking off and the presence penalty it specifies.",
+    agent: "Many short, structured decisions. Thinking stays on but is bounded, which is what keeps a one-line answer from costing thousands of tokens.",
+    custom: "Your own values. Edit the fields below.",
+  };
+  $("workload-note").textContent = notes[settings.workload_profile] || "Saved profile.";
+}
+
+/// Turn a name into an id that will not collide with a built-in or an existing
+/// preset, so switching the picker always lands on the profile the user meant.
+function presetId(name) {
+  const base = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  let id = base || "preset";
+  let n = 2;
+  while (isBuiltin(id) || settings.workload_presets.some((p) => p.id === id)) {
+    id = `${base}-${n++}`;
+  }
+  return id;
+}
+
+// "Save as" reveals the name field; the second press commits. A native prompt()
+// would be one less element, but webviews are inconsistent about honouring it.
+async function savePreset() {
+  const box = $("preset-name");
+  if (box.classList.contains("hidden")) {
+    box.classList.remove("hidden");
+    box.value = "";
+    box.focus();
+    return;
+  }
+  const name = box.value;
+  if (!name.trim()) {
+    box.classList.add("hidden");
+    return;
+  }
+  box.classList.add("hidden");
+  // Snapshot whatever is in the fields, which is what the user was just looking
+  // at -- including the values a built-in put there.
+  const values = {
+    sampling: {},
+    reasoning: $("reasoning").value,
+    reasoning_budget: Number($("reasoning_budget").value) || 0,
+    reasoning_budget_message: $("reasoning_budget_message").value,
+  };
+  for (const f of SAMPLING_FIELDS) values.sampling[f] = Number($(f).value) || 0;
+  const id = presetId(name);
+  settings.workload_presets.push({ id, name: name.trim(), values });
+  settings.workload_profile = id;
+  settings.workload = values;
+  await persist();
+}
+
+async function deletePreset() {
+  const id = settings.workload_profile;
+  if (isBuiltin(id)) return;
+  settings.workload_presets = settings.workload_presets.filter((p) => p.id !== id);
+  // Values stay as they were; only the label is gone.
+  settings.workload_profile = "custom";
+  await persist();
 }
 
 async function persist() {
@@ -35,6 +160,10 @@ async function persist() {
   for (const f of NUM_FIELDS) settings[f] = Number($(f).value) || 0;
   for (const f of BOOL_FIELDS) settings[f] = $(f).checked;
   settings.bind_lan = $("bind_lan").value === "true";
+  settings.workload_profile = $("workload_profile").value;
+  if (settings.workload_profile === "custom") {
+    for (const f of WORKLOAD_FIELDS) setWorkloadValue(f, readField(f));
+  }
   try {
     settings = await invoke("save_settings", { next: settings });
     showAlert(null);
@@ -204,14 +333,28 @@ async function pollStatus() {
   // available, since a running server and a download do not conflict.
   $("power").disabled = busy || (downloading && !running);
   $("power").title = downloading && !running ? "Waiting for the download to finish" : "";
+  // "Serving on <url>" said the same thing as the endpoint row below it, and
+  // said it in prose that could not be copied. This line is now only for the
+  // things that are genuinely messages.
   $("status-msg").textContent =
     status.message ||
-    (downloading && !running ? "Downloading — start is unavailable until it finishes." : "") ||
-    (status.state === "ready" ? `Serving on ${status.base_url}` : "");
+    (downloading && !running ? "Downloading — start is unavailable until it finishes." : "");
+
+  // The whole row goes when the server does: there is nothing to connect to,
+  // and a stale address invites a client to be pointed at it.
+  const serving = status.state === "ready" && status.base_url;
+  $("endpoint").classList.toggle("hidden", !serving);
+  $("endpoint-url").textContent = serving ? status.base_url : "";
+  if (!serving) $("endpoint-copied").classList.add("hidden");
 
   if (status.state === "error" && status.message) showAlert(status.message);
 
   $("open-chat").disabled = status.state !== "ready";
+
+  // Every setting is a command-line flag, so a change cannot reach a live
+  // process. Say so where the eye already is -- under the Start button -- rather
+  // than leaving the panel quietly describing something that is not running.
+  $("restart-note").classList.toggle("hidden", !status.restart_needed || busy);
 
   // The estimate answers "will this fit" before starting. Once the server is
   // up, the live graph below is the real answer, and leaving a pre-flight
@@ -252,6 +395,24 @@ document.querySelectorAll(".tab").forEach((tab) => {
 
 $("power").addEventListener("click", togglePower);
 $("profile").addEventListener("change", persist);
+$("restart-btn").addEventListener("click", async () => {
+  busy = true;
+  render();
+  try {
+    await invoke("stop_server");
+    await invoke("start_server");
+  } catch (e) {
+    showAlert(e);
+  }
+  busy = false;
+  await pollStatus();
+});
+$("save-preset").addEventListener("click", savePreset);
+$("preset-name").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") savePreset();
+  if (e.key === "Escape") $("preset-name").classList.add("hidden");
+});
+$("delete-preset").addEventListener("click", deletePreset);
 $("variant").addEventListener("change", async () => {
   updateDownloadRow();
   await selectCurrent();
@@ -280,7 +441,14 @@ $("download-btn").addEventListener("click", async () => {
 });
 $("cancel-btn").addEventListener("click", () => invoke("cancel_download"));
 
-for (const id of [...TEXT_FIELDS, ...NUM_FIELDS, ...BOOL_FIELDS, "bind_lan"]) {
+for (const id of [
+  ...TEXT_FIELDS,
+  ...NUM_FIELDS,
+  ...BOOL_FIELDS,
+  ...WORKLOAD_FIELDS,
+  "bind_lan",
+  "workload_profile",
+]) {
   $(id).addEventListener("change", persist);
 }
 
@@ -292,6 +460,21 @@ $("copy-url").addEventListener("click", async () => {
   await navigator.clipboard.writeText($("base_url").value);
   $("copy-url").textContent = "Copied";
   setTimeout(() => ($("copy-url").textContent = "Copy"), 1200);
+});
+let copiedTimer = null;
+$("endpoint-copy").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText($("endpoint-url").textContent);
+  } catch (e) {
+    showAlert(`Could not copy: ${e}`);
+    return;
+  }
+  // Confirming next to the icon, rather than swapping the icon itself, keeps
+  // the button from resizing the row as it changes.
+  const note = $("endpoint-copied");
+  note.classList.remove("hidden");
+  clearTimeout(copiedTimer);
+  copiedTimer = setTimeout(() => note.classList.add("hidden"), 1200);
 });
 $("open-chat").addEventListener("click", () => invoke("open_chat").catch(showAlert));
 

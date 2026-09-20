@@ -61,8 +61,30 @@ button:hover:not(:disabled) { border-color: var(--muted); }
 button:disabled { opacity: 0.5; cursor: default; }
 .power { background: var(--accent); color: var(--accent-ink); border-color: transparent; min-width: 88px; font-weight: 600; }
 
-.status-msg { margin: 10px 0 0; color: var(--muted); font-size: 12px; min-height: 16px; }
+/* The endpoint is the one string people come here to take away, so it is shown
+   as the bare address with a copy affordance rather than as prose. A URL next
+   to a copy icon needs no label, and it exists only while something is
+   listening. */
+.endpoint { margin: 12px 0 0; display: flex; align-items: center; gap: 8px; }
+#endpoint-url { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; color: var(--ink); }
+.icon-btn {
+  border: none; background: none; padding: 2px; color: var(--muted);
+  display: inline-flex; align-items: center; border-radius: 5px; cursor: pointer;
+}
+.icon-btn:hover { color: var(--ink); background: color-mix(in srgb, var(--line) 45%, transparent); }
+.endpoint-copied { font-size: 12px; color: var(--muted); }
+
+.status-msg { margin: 6px 0 0; color: var(--muted); font-size: 12px; min-height: 16px; }
 .alert { margin: 10px 0 0; padding: 9px 12px; border-radius: 8px; background: var(--err-bg); color: var(--err-ink); font-size: 13px; }
+
+/* Not an error -- nothing is broken, the running process is simply older than
+   the panel. Warn colours, and the fix sits inside the notice. */
+.restart-note {
+  margin: 10px 0 0; padding: 7px 8px 7px 12px; border-radius: 8px;
+  background: var(--warn-bg); color: var(--warn-ink); font-size: 13px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.restart-note button { flex: none; padding: 5px 10px; }
 
 .tabs { display: flex; gap: 4px; margin: 16px 0 0; border-bottom: 1px solid var(--line); }
 .tab { border: none; background: none; padding: 8px 12px; color: var(--muted); border-radius: 0; border-bottom: 2px solid transparent; }
@@ -75,7 +97,10 @@ button:disabled { opacity: 0.5; cursor: default; }
    field vertically. Only fields sharing a .row should grow -- sideways. */
 .field { display: flex; flex-direction: column; gap: 5px; flex: 0 0 auto; }
 .row > .field, .row > .field.grow { flex: 1 1 140px; }
-.field > span { font-size: 12px; color: var(--muted); }
+/* The label text, not the wrapper that pairs a control with a button -- that one
+   is a span too, and shrinking it drags the control's inherited font down with
+   it. */
+.field > span:not(.with-button) { font-size: 12px; color: var(--muted); }
 .field em { font-style: normal; opacity: 0.8; }
 input, select {
   font: inherit; padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px;

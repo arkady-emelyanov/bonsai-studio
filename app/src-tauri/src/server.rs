@@ -58,6 +58,10 @@ pub struct ServerStatus {
     pub base_url: Option<String>,
     pub chat_url: Option<String>,
     pub log: Vec<String>,
+    /// Settings have moved since this process was started, so what is serving
+    /// is no longer what the panel shows. Every setting reaches llama-server as
+    /// a command-line flag, so nothing can be applied to a live process.
+    pub restart_needed: bool,
 }
 
 struct Inner {
@@ -66,6 +70,9 @@ struct Inner {
     message: Option<String>,
     port: u16,
     log: VecDeque<String>,
+    /// The flags this process was started with, kept so the UI can say when the
+    /// settings have drifted away from what is actually running.
+    args: Vec<String>,
     /// Bumped on every start so a poll thread from a previous run cannot write
     /// its verdict over a newer one.
     generation: u64,
@@ -94,6 +101,7 @@ impl Supervisor {
                 message: None,
                 port: 0,
                 log: VecDeque::new(),
+                args: Vec::new(),
                 generation: 0,
             })),
         }
@@ -109,7 +117,16 @@ impl Supervisor {
             base_url: running.then(|| format!("http://127.0.0.1:{}/v1", inner.port)),
             chat_url: running.then(|| format!("http://127.0.0.1:{}/", inner.port)),
             log: inner.log.iter().cloned().collect(),
+            // Filled in by the caller, which is the only place that can see the
+            // current settings to compare against.
+            restart_needed: false,
         }
+    }
+
+    /// The flags the running process was started with, or None when stopped.
+    pub fn running_args(&self) -> Option<Vec<String>> {
+        let inner = self.inner.lock().unwrap();
+        matches!(inner.state, State::Starting | State::Ready).then(|| inner.args.clone())
     }
 
     pub fn start(&self, settings: &Settings, binary: PathBuf) -> Result<(), String> {
@@ -122,6 +139,7 @@ impl Supervisor {
 
         let args = settings.to_args()?;
         check_port(settings.host(), settings.port)?;
+        self.inner.lock().unwrap().args = args.clone();
 
         let mut cmd = Command::new(&binary);
         cmd.args(&args).stdout(Stdio::piped()).stderr(Stdio::piped());

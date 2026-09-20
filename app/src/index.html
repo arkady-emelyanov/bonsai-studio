@@ -19,11 +19,26 @@
   </div>
 </header>
 
+<p id="endpoint" class="endpoint hidden">
+  <code id="endpoint-url"></code>
+  <button id="endpoint-copy" class="icon-btn" title="Copy endpoint" aria-label="Copy endpoint">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <rect x="5.5" y="5.5" width="8" height="9" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
+      <path d="M10.5 3.5v-1a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1V10a1 1 0 0 0 1 1h1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+    </svg>
+  </button>
+  <span id="endpoint-copied" class="endpoint-copied hidden">Copied</span>
+</p>
 <p id="status-msg" class="status-msg"></p>
+<div id="restart-note" class="restart-note hidden">
+  <span>Settings changed. The running server still uses the old ones.</span>
+  <button id="restart-btn" class="secondary">Restart</button>
+</div>
 <div id="alert" class="alert hidden"></div>
 
 <nav class="tabs">
   <button class="tab active" data-tab="model">Model</button>
+  <button class="tab" data-tab="workload">Workload</button>
   <button class="tab" data-tab="api">API</button>
   <button class="tab" data-tab="log">Log</button>
 </nav>
@@ -81,6 +96,46 @@
     </svg>
     <span id="gpu-foot" class="hint"></span>
   </figure>
+</section>
+
+<section class="panel hidden" data-panel="workload">
+  <label class="field">
+    <span>Preset</span>
+    <span class="with-button">
+      <select id="workload_profile"></select>
+      <input id="preset-name" type="text" class="hidden" placeholder="Preset name" maxlength="40" />
+      <button id="save-preset" class="secondary" title="Save the values below as a new named preset.">Save as&hellip;</button>
+    </span>
+  </label>
+  <p id="workload-note" class="hint"></p>
+
+  <div class="row">
+    <label class="field"><span>Temperature</span><input id="temp" type="number" min="0" max="2" step="0.05" /></label>
+    <label class="field"><span>Top-p</span><input id="top_p" type="number" min="0" max="1" step="0.01" /></label>
+    <label class="field"><span>Top-k</span><input id="top_k" type="number" min="0" max="500" step="1" /></label>
+  </div>
+  <div class="row">
+    <label class="field"><span>Min-p</span><input id="min_p" type="number" min="0" max="1" step="0.01" /></label>
+    <label class="field"><span>Presence penalty</span><input id="presence_penalty" type="number" min="0" max="2" step="0.1" /></label>
+    <label class="field"><span>&nbsp;</span><button id="delete-preset" class="secondary hidden">Delete preset</button></label>
+  </div>
+
+  <div class="row">
+    <label class="field"><span>Thinking</span>
+      <select id="reasoning">
+        <option value="auto">Auto &mdash; as the model was tuned</option>
+        <option value="on">Always</option>
+        <option value="off">Off &mdash; faster, weaker on multi-step work</option>
+      </select>
+    </label>
+    <label class="field"><span>Thinking budget <em>(-1 = unlimited)</em></span>
+      <input id="reasoning_budget" type="number" min="-1" step="64" title="Token ceiling for the thinking block. The only setting that bounds deliberation directly — temperature and top-p shape what is produced, this bounds how much." />
+    </label>
+  </div>
+
+  <label class="field"><span>Budget message <em>(shown to the model when the budget runs out)</em></span>
+    <input id="reasoning_budget_message" type="text" placeholder="none — the chain is simply cut" />
+  </label>
 </section>
 
 <section class="panel hidden" data-panel="api">

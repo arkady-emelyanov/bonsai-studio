@@ -122,7 +122,15 @@ fn stop_server(state: tauri::State<AppState>) -> Result<(), String> {
 
 #[tauri::command]
 fn server_status(state: tauri::State<AppState>) -> server::ServerStatus {
-    state.supervisor.status()
+    let mut status = state.supervisor.status();
+    // Comparing the flag lists rather than the settings structs keeps this
+    // honest about what actually matters: a field that never reaches the
+    // command line cannot require a restart, and one that does always will.
+    if let Some(running) = state.supervisor.running_args() {
+        let settings = state.settings.lock().unwrap();
+        status.restart_needed = settings.to_args().map(|now| now != running).unwrap_or(false);
+    }
+    status
 }
 
 /// Open llama-server's own chat UI in the user's browser.
